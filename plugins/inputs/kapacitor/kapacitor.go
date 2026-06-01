@@ -203,11 +203,16 @@ func (k *Kapacitor) gatherURL(
 
 	if s.Kapacitor != nil {
 		for _, obj := range *s.Kapacitor {
+			if obj.Tags == nil {
+				obj.Tags = make(map[string]string)
+			}
+
 			// Strip out high-cardinality or duplicative tags
 			excludeTags := []string{"host", "cluster_id", "server_id"}
 			for _, key := range excludeTags {
 				delete(obj.Tags, key)
 			}
+			obj.Tags["url"] = url
 
 			// Convert time-related string field to int
 			if _, ok := obj.Values["avg_exec_time_ns"]; ok {
