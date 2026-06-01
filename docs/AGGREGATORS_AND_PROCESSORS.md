@@ -78,7 +78,10 @@ _aggregate_ metric will be the aggregated value of the past `period` seconds.
 
 Since many users will only care about their aggregates and not every single
 metric gathered, there is also a `drop_original` argument, which tells Telegraf
-to only emit the aggregates and not the original metrics.
+to only emit the aggregates and not the original metrics. Metrics that are
+outside the aggregation window are passed through by default because they are
+not aggregated. Set `aggregator_unaggregated_drop = true` to drop those
+unaggregated metrics.
 
 Since aggregates are created for each measurement, field, and unique tag
 combination the plugin receives, you can make use of `taginclude` to group

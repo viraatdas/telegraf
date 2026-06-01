@@ -1553,6 +1553,7 @@ func (c *Config) buildAggregator(name, source string, tbl *ast.Table) (*models.A
 	}
 
 	conf.DropOriginal = c.getFieldBool(tbl, "drop_original")
+	conf.AggregatorUnaggregatedDrop = c.getFieldBool(tbl, "aggregator_unaggregated_drop")
 	conf.MeasurementPrefix = c.getFieldString(tbl, "name_prefix")
 	conf.MeasurementSuffix = c.getFieldString(tbl, "name_suffix")
 	conf.NameOverride = c.getFieldString(tbl, "name_override")
@@ -1805,6 +1806,7 @@ func (c *Config) missingTomlField(_ reflect.Type, key string) error {
 	switch key {
 	// General options to ignore
 	case "alias", "always_include_local_tags",
+		"aggregator_unaggregated_drop",
 		"buffer_strategy", "buffer_directory", "buffer_disk_sync",
 		"collection_jitter", "collection_offset",
 		"data_format", "delay", "drop", "drop_original",

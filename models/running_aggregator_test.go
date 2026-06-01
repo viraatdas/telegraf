@@ -214,6 +214,59 @@ func TestRunningAggregatorAddDropOriginal(t *testing.T) {
 	require.False(t, ra.Add(m2))
 }
 
+func TestRunningAggregatorAddOutsideCurrentPeriodDropOriginal(t *testing.T) {
+	tests := []struct {
+		name                       string
+		aggregatorUnaggregatedDrop bool
+		expectedDrop               bool
+	}{
+		{
+			name:         "pass through by default",
+			expectedDrop: false,
+		},
+		{
+			name:                       "drop with legacy opt-in",
+			aggregatorUnaggregatedDrop: true,
+			expectedDrop:               true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := &mockAggregator{}
+			ra := NewRunningAggregator(a, &AggregatorConfig{
+				Name: "TestRunningAggregator",
+				Filter: Filter{
+					NamePass: []string{"*"},
+				},
+				DropOriginal:               true,
+				AggregatorUnaggregatedDrop: tt.aggregatorUnaggregatedDrop,
+				Period:                     time.Millisecond * 500,
+			})
+			require.NoError(t, ra.Config.Filter.Compile())
+
+			now := time.Now()
+			ra.UpdateWindow(now, now.Add(ra.Config.Period))
+
+			for _, timestamp := range []time.Time{
+				now.Add(-time.Hour),
+				now.Add(time.Hour),
+			} {
+				m := metric.New("RITest",
+					map[string]string{},
+					map[string]interface{}{
+						"value": int64(101),
+					},
+					timestamp,
+					telegraf.Untyped,
+				)
+				require.Equal(t, tt.expectedDrop, ra.Add(m))
+			}
+			require.Zero(t, a.sum)
+		})
+	}
+}
+
 func TestRunningAggregatorAddDoesNotModifyMetric(t *testing.T) {
 	ra := NewRunningAggregator(&mockAggregator{}, &AggregatorConfig{
 		Name: "TestRunningAggregator",
