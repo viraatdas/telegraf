@@ -1,6 +1,7 @@
 package kapacitor_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -81,6 +82,24 @@ func TestKapacitor(t *testing.T) {
 		}, tags)
 }
 
+func TestKapacitorAddsURLTagToNestedMetrics(t *testing.T) {
+	serverA := newKapacitorTestServer(t, kapacitorNestedResponse("task-a", "main-a", 1, 2, 3, 4))
+	defer serverA.Close()
+	serverB := newKapacitorTestServer(t, kapacitorNestedResponse("task-b", "main-b", 5, 6, 7, 8))
+	defer serverB.Close()
+
+	plugin := &kapacitor.Kapacitor{
+		URLs: []string{serverA.URL, serverB.URL},
+	}
+
+	var acc testutil.Accumulator
+	require.NoError(t, plugin.Gather(&acc))
+	require.Empty(t, acc.Errors)
+
+	assertNestedURLTags(t, &acc, serverA.URL, "task-a", "main-a", 1, 2, 3, 4)
+	assertNestedURLTags(t, &acc, serverB.URL, "task-b", "main-b", 5, 6, 7, 8)
+}
+
 func TestMissingStats(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		if _, err := w.Write([]byte(`{}`)); err != nil {
@@ -124,6 +143,129 @@ func TestErrorHandling(t *testing.T) {
 	require.NoError(t, plugin.Gather(&acc))
 	acc.WaitError(1)
 	require.Equal(t, uint64(0), acc.NMetrics())
+}
+
+func newKapacitorTestServer(t *testing.T, body string) *httptest.Server {
+	t.Helper()
+
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if _, err := w.Write([]byte(body)); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			t.Error(err)
+			return
+		}
+	}))
+}
+
+func kapacitorNestedResponse(task, taskMaster string, collected, emitted, pointsReceived, loadErrors int) string {
+	return fmt.Sprintf(`{
+	"version": "1.7.6",
+	"num_enabled_tasks": 1,
+	"num_subscriptions": 2,
+	"num_tasks": 3,
+	"kapacitor": {
+		"edge": {
+			"name": "edges",
+			"tags": {
+				"task": %q,
+				"parent": "write_points",
+				"child": "stream",
+				"type": "stream",
+				"host": "localhost",
+				"cluster_id": "cluster-id",
+				"server_id": "server-id"
+			},
+			"values": {
+				"collected": %d,
+				"emitted": %d
+			}
+		},
+		"ingress": {
+			"name": "ingress",
+			"tags": {
+				"task_master": %q,
+				"database": "_internal",
+				"retention_policy": "monitor",
+				"measurement": "runtime"
+			},
+			"values": {
+				"points_received": %d
+			}
+		},
+		"node": {
+			"name": "nodes",
+			"tags": {
+				"task": %q,
+				"node": "stream0",
+				"type": "stream",
+				"kind": "stream"
+			},
+			"values": {
+				"avg_exec_time_ns": "2ms"
+			}
+		},
+		"load": {
+			"name": "load",
+			"values": {
+				"errors": %d
+			}
+		}
+	}
+}`, task, collected, emitted, taskMaster, pointsReceived, task, loadErrors)
+}
+
+func assertNestedURLTags(
+	t *testing.T,
+	acc *testutil.Accumulator,
+	url, task, taskMaster string,
+	collected, emitted, pointsReceived, loadErrors int,
+) {
+	t.Helper()
+
+	acc.AssertContainsTaggedFields(t, "kapacitor_edges",
+		map[string]interface{}{
+			"collected": float64(collected),
+			"emitted":   float64(emitted),
+		},
+		map[string]string{
+			"task":   task,
+			"parent": "write_points",
+			"child":  "stream",
+			"type":   "stream",
+			"url":    url,
+		})
+
+	acc.AssertContainsTaggedFields(t, "kapacitor_ingress",
+		map[string]interface{}{
+			"points_received": float64(pointsReceived),
+		},
+		map[string]string{
+			"task_master":      taskMaster,
+			"database":         "_internal",
+			"retention_policy": "monitor",
+			"measurement":      "runtime",
+			"url":              url,
+		})
+
+	acc.AssertContainsTaggedFields(t, "kapacitor_nodes",
+		map[string]interface{}{
+			"avg_exec_time_ns": int64(2 * 1000 * 1000),
+		},
+		map[string]string{
+			"task": task,
+			"node": "stream0",
+			"type": "stream",
+			"kind": "stream",
+			"url":  url,
+		})
+
+	acc.AssertContainsTaggedFields(t, "kapacitor_load",
+		map[string]interface{}{
+			"errors": float64(loadErrors),
+		},
+		map[string]string{
+			"url": url,
+		})
 }
 
 func TestErrorHandling404(t *testing.T) {
