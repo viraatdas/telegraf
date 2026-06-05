@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	_ "github.com/influxdata/telegraf/plugins/aggregators/minmax" // Blank import to register the aggregator for testing
 )
 
 func TestEnvironmentSubstitution(t *testing.T) {
@@ -109,6 +111,20 @@ func TestEnvironmentSubstitution(t *testing.T) {
 			require.EqualValues(t, tt.expected, string(actual))
 		})
 	}
+}
+
+func TestLoadAggregatorUnaggregatedDrop(t *testing.T) {
+	c := NewConfig()
+	cfg := []byte(`
+[[aggregators.minmax]]
+  period = "10s"
+  drop_original = true
+  aggregator_unaggregated_drop = true
+`)
+	require.NoError(t, c.LoadConfigData(cfg, EmptySourcePath))
+	require.Len(t, c.Aggregators, 1)
+	require.True(t, c.Aggregators[0].Config.DropOriginal)
+	require.True(t, c.Aggregators[0].Config.AggregatorUnaggregatedDrop)
 }
 
 func TestEnvironmentSubstitutionOldBehavior(t *testing.T) {

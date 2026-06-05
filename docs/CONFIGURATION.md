@@ -614,6 +614,9 @@ Parameters that can be used with any aggregator plugin:
   The default grace duration is set to 0 s.
 - **drop_original**: If true, the original metric will be dropped by the
   aggregator and will not get sent to the output plugins.
+- **aggregator_unaggregated_drop**: If true, metrics ignored because their
+  timestamp is outside of the aggregation window will be dropped instead of
+  passed downstream. The default is false.
 - **name_override**: Override the base name of the measurement.  (Default is
   the name of the input).
 - **name_prefix**: Specifies a prefix to attach to the measurement name.

@@ -73,15 +73,16 @@ func NewRunningAggregator(aggregator telegraf.Aggregator, config *AggregatorConf
 
 // AggregatorConfig is the common config for all aggregators.
 type AggregatorConfig struct {
-	Name         string
-	Source       string
-	Alias        string
-	ID           string
-	DropOriginal bool
-	Period       time.Duration
-	Delay        time.Duration
-	Grace        time.Duration
-	LogLevel     string
+	Name                       string
+	Source                     string
+	Alias                      string
+	ID                         string
+	DropOriginal               bool
+	AggregatorUnaggregatedDrop bool
+	Period                     time.Duration
+	Delay                      time.Duration
+	Grace                      time.Duration
+	LogLevel                   string
 
 	NameOverride      string
 	MeasurementPrefix string
@@ -165,10 +166,10 @@ func (r *RunningAggregator) Add(m telegraf.Metric) bool {
 	defer r.Unlock()
 
 	if m.Time().Before(r.periodStart.Add(-r.Config.Grace)) || m.Time().After(r.periodEnd.Add(r.Config.Delay)) {
-		r.log.Debugf("Metric is outside aggregation window; discarding. %s: m: %s e: %s g: %s",
+		r.log.Debugf("Metric is outside aggregation window; skipping aggregation. %s: m: %s e: %s g: %s",
 			m.Time(), r.periodStart, r.periodEnd, r.Config.Grace)
 		r.MetricsDropped.Incr(1)
-		return r.Config.DropOriginal
+		return r.Config.AggregatorUnaggregatedDrop
 	}
 
 	r.Aggregator.Add(m)
